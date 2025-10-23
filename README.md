@@ -1,13 +1,14 @@
 # API de Lista de Tareas
 
-API sencilla construida con Flask para gestionar tareas pendientes en memoria. Permite demostrar el ciclo CRUD completo, validaciones de negocio basicas y la separacion de responsabilidades mediante un almacen dedicado.
+API REST construida con Flask, SQLite y autenticacion mediante tokens firmados. Gestiona tareas por usuario y cubre el ciclo CRUD completo con validaciones de negocio.
 
 ## Caracteristicas
 
-- CRUD completo de tareas con respuesta JSON consistente.
-- Validacion de longitud maxima y deteccion de duplicados (respuesta `409 Conflict`).
-- Almacenamiento en memoria encapsulado en la clase `TaskStore`.
-- Manejo centralizado de errores con mensajes descriptivos.
+- Registro y login con passwords hasheados y tokens Bearer.
+- CRUD de tareas asociado al usuario autenticado, con control de duplicados y limite de longitud.
+- Persistencia real en SQLite gracias a SQLAlchemy, lista para migrar a otras bases.
+- Respuestas JSON uniformes con manejo centralizado de errores.
+- Suite de pruebas automatizadas con pytest sobre una base temporal.
 
 ## Requisitos
 
@@ -26,18 +27,82 @@ pip install -r requirements.txt
 python app.py
 ```
 
-La aplicacion se inicia en `http://127.0.0.1:5000/` en modo debug.
+La aplicacion arranca en `http://127.0.0.1:5000/` en modo debug y crea el archivo `tareas.db` con las tablas necesarias si aun no existe.
 
-### Ejemplo rapido con `curl`
+### Flujo rapido con `curl`
 
 ```bash
-# Crear tarea
+# 1. Registrar usuario
+curl -X POST http://127.0.0.1:5000/registro \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "ana", "password": "supersecreto"}'
+
+# 2. Obtener token
+TOKEN=$(curl -s -X POST http://127.0.0.1:5000/login \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "ana", "password": "supersecreto"}' | jq -r '.token')
+
+# 3. Crear tarea autenticada
 curl -X POST http://127.0.0.1:5000/tareas \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"descripcion": "Comprar leche"}'
 
-# Listar tareas
-curl http://127.0.0.1:5000/tareas
+# 4. Listar tareas del usuario
+curl http://127.0.0.1:5000/tareas \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Escenario completo paso a paso
+
+```bash
+# 1. Registrar al usuario principal
+curl -X POST http://127.0.0.1:5000/registro \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "admin", "password": "cambiame123"}'
+
+# 2. Iniciar sesion y guardar token
+TOKEN=$(curl -s -X POST http://127.0.0.1:5000/login \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "admin", "password": "cambiame123"}' | jq -r '.token')
+
+# 3. Crear varias tareas
+curl -X POST http://127.0.0.1:5000/tareas \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"descripcion": "Redactar informe mensual"}'
+
+curl -X POST http://127.0.0.1:5000/tareas \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"descripcion": "Enviar facturas", "completada": true}'
+
+# 4. Consultar la lista
+curl http://127.0.0.1:5000/tareas \
+  -H "Authorization: Bearer $TOKEN"
+# Respuesta esperada:
+# [
+#   {"id":1,"descripcion":"Redactar informe mensual","completada":false},
+#   {"id":2,"descripcion":"Enviar facturas","completada":true}
+# ]
+
+# 5. Actualizar la primera tarea
+curl -X PUT http://127.0.0.1:5000/tareas/1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"completada": true}'
+
+# 6. Eliminar la segunda tarea
+curl -X DELETE http://127.0.0.1:5000/tareas/2 \
+  -H "Authorization: Bearer $TOKEN"
+
+# 7. Verificar el estado final
+curl http://127.0.0.1:5000/tareas \
+  -H "Authorization: Bearer $TOKEN"
+# Respuesta esperada:
+# [
+#   {"id":1,"descripcion":"Redactar informe mensual","completada":true}
+# ]
 ```
 
 ## Pruebas
@@ -46,32 +111,34 @@ curl http://127.0.0.1:5000/tareas
 pytest
 ```
 
-Las pruebas usan el cliente de testing de Flask y validan casos de uso basicos y errores comunes.
+Las pruebas levantan una base SQLite temporal, validan autenticacion y aseguran la logica de negocio de los endpoints.
 
 ## Endpoints
 
-- `POST /tareas`: crea una tarea. Ejemplo de cuerpo:
+- `POST /registro`: crea un nuevo usuario. Requiere `nombre` y `password`.
+- `POST /login`: devuelve un token Bearer para el usuario autenticado.
+- `POST /tareas`: crea una tarea (requiere token). Cuerpo ejemplo:
   ```json
   {
     "descripcion": "Comprar leche",
     "completada": false
   }
   ```
-- `GET /tareas`: devuelve todas las tareas.
-- `GET /tareas/<id>`: devuelve la tarea con el identificador indicado.
-- `PUT /tareas/<id>`: actualiza campos existentes de una tarea.
-- `DELETE /tareas/<id>`: elimina una tarea.
+- `GET /tareas`: lista las tareas del usuario autenticado.
+- `GET /tareas/<id>`: devuelve la tarea indicada si pertenece al usuario.
+- `PUT /tareas/<id>`: actualiza descripcion y/o estado de una tarea propia.
+- `DELETE /tareas/<id>`: elimina una tarea del usuario.
 
 ## Notas
 
-- El almacenamiento se maneja mediante una clase `TaskStore`, lo que facilita migrar a otra persistencia.
-- Se valida la longitud maxima de la descripcion y se impiden duplicados (codigo 409).
-- El almacenamiento es solo en memoria, por lo que se vacia al reiniciar la aplicacion.
-- Las respuestas de error incluyen mensajes descriptivos en formato JSON.
+- La clave `SECRET_KEY` incluida es solo para desarrollo; cambia su valor en despliegues reales.
+- Los tokens expiran tras 24 horas (`TOKEN_MAX_AGE`), configurable por variable de entorno o al crear la app.
+- Cada usuario ve unicamente sus tareas; las descripciones duplicadas se bloquean por usuario.
+- El archivo `tareas.db` puede eliminarse con seguridad para reiniciar el estado local.
 
 ## Futuras mejoras sugeridas
 
-- Anadir autenticacion y separar tareas por usuario.
-- Incorporar persistencia real con SQLite/PostgreSQL y SQLAlchemy.
-- Documentar la API con OpenAPI/Swagger y exponer un playground interactivo.
-- Desplegar con Docker y configurar un servidor WSGI (gunicorn o waitress) para produccion.
+- Anadir renovacion de tokens (refresh) y roles/permiso por usuario.
+- Cambiar a PostgreSQL con SQLAlchemy y migraciones gestionadas con Alembic.
+- Generar documentacion OpenAPI/Swagger y hospedar un playground interactivo.
+- Empaquetar con Docker y desplegar en un servidor WSGI como gunicorn.
