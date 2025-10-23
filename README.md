@@ -19,7 +19,7 @@ La aplicacion permite registrar usuarios, iniciar sesion y operar sobre una list
 - **Framework:** Flask 3
 - **ORM:** Flask-SQLAlchemy sobre SQLAlchemy 2
 - **Tokenizacion:** URLSafeTimedSerializer (itsdangerous)
-- **Seguridad:** Hash de contrasenas con Werkzeug
+- **Seguridad:** Hash de contraseñas con Werkzeug
 - **Pruebas:** pytest con fixtures reutilizables
 
 ## Requisitos previos
