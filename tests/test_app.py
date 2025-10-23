@@ -57,7 +57,7 @@ def test_login_requiere_credenciales_validas(client):
 
     # Usuario correcto pero password incorrecto.
     client.post("/registro", json={"nombre": "ana", "password": "password"})
-    respuesta = client.post("/login", json={"nombre": "ana", "password": "fallo"})
+    respuesta = client.post("/login", json={"nombre": "ana", "password": "fallox"})
     assert respuesta.status_code == 401
 
 
