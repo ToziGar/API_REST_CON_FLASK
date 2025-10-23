@@ -79,7 +79,7 @@ def _verificar_token(token: str) -> User:
     if user_id is None:
         abort(401, description="Token incompleto.")
 
-    usuario = User.query.get(user_id)
+    usuario = db.session.get(User, user_id)
     if usuario is None:
         abort(401, description="Usuario no encontrado.")
     return usuario
