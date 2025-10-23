@@ -131,14 +131,14 @@ Las pruebas levantan una base SQLite temporal, validan autenticacion y aseguran 
 
 ## Notas
 
-- La clave `SECRET_KEY` incluida es solo para desarrollo; cambia su valor en despliegues reales.
-- Los tokens expiran tras 24 horas (`TOKEN_MAX_AGE`), configurable por variable de entorno o al crear la app.
-- Cada usuario ve unicamente sus tareas; las descripciones duplicadas se bloquean por usuario.
-- El archivo `tareas.db` puede eliminarse con seguridad para reiniciar el estado local.
+- El almacenamiento se maneja mediante una clase `TaskStore`, lo que facilita migrar a otra persistencia.
+- Se valida la longitud maxima de la descripcion y se impiden duplicados (codigo 409).
+- El almacenamiento es solo en memoria, por lo que se vacia al reiniciar la aplicacion.
+- Las respuestas de error incluyen mensajes descriptivos en formato JSON.
 
 ## Futuras mejoras sugeridas
 
-- Anadir renovacion de tokens (refresh) y roles/permiso por usuario.
-- Cambiar a PostgreSQL con SQLAlchemy y migraciones gestionadas con Alembic.
-- Generar documentacion OpenAPI/Swagger y hospedar un playground interactivo.
-- Empaquetar con Docker y desplegar en un servidor WSGI como gunicorn.
+- Anadir autenticacion y separar tareas por usuario.
+- Incorporar persistencia real con SQLite/PostgreSQL y SQLAlchemy.
+- Documentar la API con OpenAPI/Swagger y exponer un playground interactivo.
+- Desplegar con Docker y configurar un servidor WSGI (gunicorn o waitress) para produccion.
