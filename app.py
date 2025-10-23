@@ -8,11 +8,13 @@ from flask import Flask, abort, jsonify, request
 
 app = Flask(__name__)
 
+# Limite de caracteres permitido para la descripcion de cada tarea.
 MAX_DESCRIPTION_LENGTH = 255
 
 
 @dataclass
 class Task:
+    # Representa una tarea simple con identificador, descripcion y estado.
     id: int
     descripcion: str
     completada: bool = False
@@ -23,18 +25,22 @@ class TaskStore:
 
     def __init__(self) -> None:
         self._tasks: Dict[int, Task] = {}
+        # Generador incremental para asignar IDs unicos sin depender de una base externa.
         self._id_sequence = count(start=1)
 
     def create(self, descripcion: str, completada: bool = False) -> Task:
+        # Genera un nuevo ID y guarda la tarea en memoria.
         task_id = next(self._id_sequence)
         task = Task(id=task_id, descripcion=descripcion, completada=completada)
         self._tasks[task_id] = task
         return task
 
     def list(self) -> List[Task]:
+        # Devuelve todas las tareas almacenadas.
         return list(self._tasks.values())
 
     def get(self, task_id: int) -> Optional[Task]:
+        # Recupera la tarea por ID, si existe.
         return self._tasks.get(task_id)
 
     def update(
@@ -44,6 +50,7 @@ class TaskStore:
         descripcion: Optional[str] = None,
         completada: Optional[bool] = None,
     ) -> Task:
+        # Modifica la tarea existente con los campos proporcionados.
         task = self._tasks[task_id]
         if descripcion is not None:
             task.descripcion = descripcion
@@ -52,6 +59,7 @@ class TaskStore:
         return task
 
     def delete(self, task_id: int) -> None:
+        # Elimina la tarea del almacen.
         del self._tasks[task_id]
 
     def exists_description(self, descripcion: str, *, exclude_id: Optional[int] = None) -> bool:
@@ -74,6 +82,7 @@ store = TaskStore()
 
 
 def _task_to_dict(task: Task) -> Dict[str, object]:
+    # Serializa el dataclass en un diccionario apto para JSON.
     return asdict(task)
 
 
@@ -88,9 +97,11 @@ def _get_task_or_404(task_id: int) -> Task:
 def _parse_task_payload(partial: bool = False) -> Dict[str, object]:
     """Valida el cuerpo de la peticion para crear o actualizar una tarea."""
     if not request.is_json:
+        # Solo aceptamos cuerpos JSON; cualquier otro formato se rechaza.
         abort(400, description="Se esperaba un cuerpo JSON.")
     data = request.get_json()
     if not isinstance(data, dict):
+        # El cuerpo debe ser un objeto JSON, no listas ni valores primitivos.
         abort(400, description="El cuerpo JSON debe ser un objeto.")
 
     task: Dict[str, object] = {}
@@ -119,13 +130,17 @@ def _parse_task_payload(partial: bool = False) -> Dict[str, object]:
 
 @app.post("/tareas")
 def crear_tarea():
+    # Leemos y validamos el cuerpo de la peticion posterior.
     payload = _parse_task_payload()
+    # Evitamos duplicar tareas con la misma descripcion.
     if store.exists_description(payload["descripcion"]):
         abort(409, description="Ya existe una tarea con la misma descripcion.")
+    # Registramos la tarea en el almacen.
     task = store.create(
         descripcion=payload["descripcion"],
         completada=payload.get("completada", False),
     )
+    # Preparamos la respuesta HTTP con el recurso creado.
     response = jsonify(_task_to_dict(task))
     response.status_code = 201
     response.headers["Location"] = f"/tareas/{task.id}"
@@ -134,19 +149,23 @@ def crear_tarea():
 
 @app.get("/tareas")
 def listar_tareas():
+    # Recopilamos y serializamos todas las tareas para la respuesta.
     tasks = [_task_to_dict(task) for task in store.list()]
     return jsonify(tasks)
 
 
 @app.get("/tareas/<int:task_id>")
 def obtener_tarea(task_id: int):
+    # Solo devolvemos la tarea si existe; de lo contrario se lanza 404.
     task = _get_task_or_404(task_id)
     return jsonify(_task_to_dict(task))
 
 
 @app.put("/tareas/<int:task_id>")
 def actualizar_tarea(task_id: int):
+    # Verificamos que la tarea exista antes de aplicar cambios.
     _get_task_or_404(task_id)
+    # Aceptamos actualizaciones parciales.
     payload = _parse_task_payload(partial=True)
 
     # Solo actualizamos los campos presentes en la peticion.
@@ -154,11 +173,13 @@ def actualizar_tarea(task_id: int):
     updated_completada: Optional[bool] = None
 
     if "descripcion" in payload:
+        # La descripcion no debe duplicarse en otras tareas.
         if store.exists_description(payload["descripcion"], exclude_id=task_id):
             abort(409, description="Ya existe una tarea con la misma descripcion.")
         updated_descripcion = payload["descripcion"]
     if "completada" in payload:
         updated_completada = payload["completada"]
+    # Persistimos los cambios en el almacen.
     updated = store.update(
         task_id,
         descripcion=updated_descripcion,
@@ -169,7 +190,9 @@ def actualizar_tarea(task_id: int):
 
 @app.delete("/tareas/<int:task_id>")
 def eliminar_tarea(task_id: int):
+    # Confirmamos que la tarea exista antes de eliminar.
     _get_task_or_404(task_id)
+    # Eliminamos del almacen en memoria.
     store.delete(task_id)
     return "", 204
 
