@@ -21,6 +21,14 @@ python app.py
 
 La aplicacion se inicia en `http://127.0.0.1:5000/` en modo debug.
 
+## Pruebas
+
+```bash
+pytest
+```
+
+Las pruebas usan el cliente de testing de Flask y validan casos de uso basicos y errores comunes.
+
 ## Endpoints
 
 - `POST /tareas`: crea una tarea. Ejemplo de cuerpo:
